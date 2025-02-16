@@ -27,24 +27,14 @@ func LoadConfig() (*Config, error) {
 
     config := &Config{}
 
-    // MongoDB Config
-    config.MongoDB.URI = getEnv("MONGODB_URI", "mongodb://admin:password@localhost:27017")
-    config.MongoDB.Database = getEnv("MONGODB_DATABASE", "notifications")
+    config.MongoDB.URI = os.Getenv("MONGODB_URI")
+    config.MongoDB.Database = os.Getenv("MONGODB_DATABASE")
 
-    // RabbitMQ Config
-    config.RabbitMQ.URI = getEnv("RABBITMQ_URI", "amqp://guest:guest@localhost:5672/")
-    config.RabbitMQ.Queue = getEnv("RABBITMQ_QUEUE", "notifications")
-    config.RabbitMQ.Exchange = getEnv("RABBITMQ_EXCHANGE", "notifications")
+    config.RabbitMQ.URI = os.Getenv("RABBITMQ_URI")
+    config.RabbitMQ.Queue = os.Getenv("RABBITMQ_QUEUE")
+    config.RabbitMQ.Exchange = os.Getenv("RABBITMQ_EXCHANGE")
 
-    // Server Config
-    config.Server.Port = getEnv("SERVER_PORT", "8080")
+    config.Server.Port = os.Getenv("SERVER_PORT")
 
     return config, nil
-}
-
-func getEnv(key, defaultValue string) string {
-    if value := os.Getenv(key); value != "" {
-        return value
-    }
-    return defaultValue
 }
