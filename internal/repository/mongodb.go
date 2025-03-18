@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+    "go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 type MongoRepository struct {
@@ -64,4 +65,12 @@ func (r *MongoRepository) GetUnreadNotifications(userId string) ([]models.Notifi
     }
 
     return notifications, nil
+}
+
+func (r *MongoRepository) Ping(ctx context.Context) error {
+    return r.client.Ping(ctx, readpref.Primary())
+}
+
+func (r *MongoRepository) Disconnect(ctx context.Context) error {
+    return r.client.Disconnect(ctx)
 }
