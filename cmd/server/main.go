@@ -1,24 +1,23 @@
 package main
 
 import (
-	"context"
 	"log"
-	"time"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"notificationservice/internal/config"
-	"notificationservice/internal/repository"
+	"notificationservice/internal/handlers"
 	"notificationservice/internal/rabbitmq"
+	"notificationservice/internal/repository"
 )
 
 func main() {
     log.Println("Starting Notification Service...")
 
-    // Create a background context
-    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer cancel()
-
+    // Load config
     cfg, err := config.LoadConfig()
-    if (err != nil) {
+    if err != nil {
         log.Fatalf("Failed to load config: %v", err)
     }
 
@@ -28,34 +27,41 @@ func main() {
         log.Fatalf("Failed to connect to MongoDB: %v", err)
     }
 
-    // Verify MongoDB connection
-    if err := mongoRepo.Ping(ctx); err != nil {
-        log.Fatalf("Failed to ping MongoDB: %v", err)
-    }
-    log.Println("Successfully connected to MongoDB")
+    // Setup notification handler
+    notificationHandler := handlers.NewNotificationHandler(mongoRepo)
 
-    // Ensure MongoDB disconnects properly on application shutdown
-    defer func() {
-        if err := mongoRepo.Disconnect(context.Background()); err != nil {
-            log.Printf("Error disconnecting from MongoDB: %v", err)
-        }
-    }()
+    // Initialize RabbitMQ consumer (encapsulates all RabbitMQ operations)
+    consumer := rabbitmq.NewConsumer(
+        cfg.RabbitMQ.URI,
+        cfg.RabbitMQ.Queue,
+        cfg.RabbitMQ.Exchange,
+        cfg.RabbitMQ.RoutingKey,
+        &rabbitmq.ConsumerOptions{
+            DeadLetterConfig: &rabbitmq.DeadLetterConfig{
+                ExchangeName: cfg.RabbitMQ.DeadLetterQueue.Exchange,
+                QueueName:    cfg.RabbitMQ.DeadLetterQueue.Queue,
+                RoutingKey:   cfg.RabbitMQ.DeadLetterQueue.RoutingKey,
+            },
+        },
+    )
 
-    // Initialize RabbitMQ consumer
-    consumer, err := rabbitmq.NewConsumer(cfg.RabbitMQ.URI, cfg.RabbitMQ.Queue)
-    if err != nil {
+    // Connect and setup exchanges/queues
+    if err := consumer.Connect(); err != nil {
         log.Fatalf("Failed to connect to RabbitMQ: %v", err)
     }
+    defer consumer.Close()
 
     // Start consuming messages
-    err = consumer.Start(func(msg []byte) error {
-        // TODO: Implement message handling
-        log.Printf("Received message: %s", string(msg))
-        return nil
-    })
-    if err != nil {
+    if err := consumer.Start(notificationHandler); err != nil {
         log.Fatalf("Failed to start consuming messages: %v", err)
     }
 
-    log.Printf("Server starting on port: %s", cfg.Server.Port)
+    log.Printf("Server started successfully")
+
+    // Wait for termination signal
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+
+    log.Println("Shutting down server...")
 }

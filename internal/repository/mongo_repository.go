@@ -39,6 +39,7 @@ func (r *MongoRepository) SaveNotification(notification *models.Notification) er
     defer cancel()
 
     collection := r.client.Database(r.database).Collection(r.collection)
+    notification.CreatedAt = time.Now()
     _, err := collection.InsertOne(ctx, notification)
     return err
 }
