@@ -5,6 +5,8 @@ import (
 	"log"
 	"time"
 
+	"notificationservice/internal/errors"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -75,7 +77,6 @@ func (consumer *Consumer) Connect() error {
         }
     }
 
-    // Setup main queue with dead letter routing if applicable
     args := amqp.Table{}
     if consumer.deadLetterConfig != nil {
         args["x-dead-letter-exchange"] = consumer.deadLetterConfig.ExchangeName
@@ -174,19 +175,26 @@ func (c *Consumer) Start(handler MessageHandler) error {
             if err != nil {
                 log.Printf("Error processing message: %v", err)
                 
-                // Check if this is a validation error (which is non-retriable)
-                if IsValidationError(err) {
-                    c.moveToDeadLetter(msg.Body, "validation", err.Error())
-                    msg.Ack(false) // Don't requeue validation errors
-                } else if IsRetriableError(err) {
-                    // Requeue retriable errors
+                if errors.IsValidationError(err) {
+                    log.Printf("Validation error detected, sending to dead letter queue")
+                    
+                    errorDesc := errors.GetErrorDescription(err)
+                    c.moveToDeadLetter(msg.Body, string(errors.ValidationError), errorDesc)
+                    
+                    msg.Ack(false)
+                } else if errors.IsRetriableError(err) {
+                    log.Printf("Retriable error detected, requeueing message")
                     msg.Nack(false, true)
                 } else {
-                    // Non-retriable processing errors
-                    c.moveToDeadLetter(msg.Body, "processing", err.Error())
+                    log.Printf("Processing error detected, sending to dead letter queue")
+                    
+                    errorDesc := errors.GetErrorDescription(err)
+                    c.moveToDeadLetter(msg.Body, string(errors.ProcessingError), errorDesc)
+                    
                     msg.Ack(false)
                 }
             } else {
+                log.Printf("Message processed successfully")
                 msg.Ack(false)
             }
         }
@@ -196,7 +204,6 @@ func (c *Consumer) Start(handler MessageHandler) error {
     return nil
 }
 
-// moveToDeadLetter publishes a message to the dead letter exchange
 func (c *Consumer) moveToDeadLetter(body []byte, errorType, errorMsg string) {
     if c.deadLetterConfig == nil {
         log.Println("Dead letter exchange not configured, discarding failed message")
@@ -204,8 +211,8 @@ func (c *Consumer) moveToDeadLetter(body []byte, errorType, errorMsg string) {
     }
 
     err := c.channel.Publish(
-        c.deadLetterConfig.ExchangeName,   // exchange
-        c.deadLetterConfig.RoutingKey,     // routing key
+        c.deadLetterConfig.ExchangeName,  // exchange
+        c.deadLetterConfig.RoutingKey,    // routing key
         false,                            // mandatory
         false,                            // immediate
         amqp.Publishing{
@@ -221,10 +228,11 @@ func (c *Consumer) moveToDeadLetter(body []byte, errorType, errorMsg string) {
     
     if err != nil {
         log.Printf("Failed to publish to dead letter exchange: %v", err)
+    } else {
+        log.Printf("Message published to dead letter exchange with error type: %s", errorType)
     }
 }
 
-// Close closes the connection and channel
 func (c *Consumer) Close() error {
     var err error
 
@@ -241,17 +249,4 @@ func (c *Consumer) Close() error {
     }
 
     return err
-}
-
-// Error classification helpers
-func IsValidationError(err error) bool {
-    // Implement logic to identify validation errors
-    // This is a simplistic example - you'll need to adapt to your error types
-    return false
-}
-
-func IsRetriableError(err error) bool {
-    // Implement logic to identify retriable errors
-    // For example, check if it's a temporary network issue
-    return false
 }

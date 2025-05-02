@@ -45,5 +45,3 @@ type Notification struct {
 	CreatedAt     time.Time           `bson:"createdAt" json:"createdAt"`
 	ReceivedAt    *time.Time          `bson:"receivedAt,omitempty" json:"receivedAt,omitempty"`
 }
-
-
