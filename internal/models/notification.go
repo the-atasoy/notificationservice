@@ -10,8 +10,7 @@ type NotificationType string
 
 const (
     EmailNotification     NotificationType = "Mail"
-    WebSocketNotification NotificationType = "WebSocket"
-    RestNotification      NotificationType = "Rest"
+    InAppNotification NotificationType = "InApp"
 )
 
 type NotificationStatus string

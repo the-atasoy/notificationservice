@@ -25,7 +25,7 @@ func main() {
         log.Fatalf("Failed to connect to MongoDB: %v", err)
     }
 
-    notificationHandler := handlers.NewNotificationHandler(mongoRepo)
+    handler := handlers.NewHandler(mongoRepo)
 
     consumer := rabbitmq.NewConsumer(
         cfg.RabbitMQ.URI,
@@ -46,7 +46,7 @@ func main() {
     }
     defer consumer.Close()
 
-    if err := consumer.Start(notificationHandler); err != nil {
+    if err := consumer.Start(handler); err != nil {
         log.Fatalf("Failed to start consuming messages: %v", err)
     }
 
