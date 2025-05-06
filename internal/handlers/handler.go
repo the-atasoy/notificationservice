@@ -24,35 +24,71 @@ func NewHandler(repo *repository.MongoRepository) *Handler {
 	}
 }
 
-func (handler *Handler) ProcessMessage(data []byte) error {
+func (handler *Handler) ProcessMessage(data []byte, messageID string) error {
 	notification, err := handler.validateMessage(data)
 	if err != nil {
 		return err
 	}
 
-	if err := handler.repo.SaveNotification(notification); err != nil {
-		return errors.NewRetriableError("database operation failed", err)
+	existingNotification, err := handler.repo.GetNotificationByMessageID(messageID)
+  if err != nil{
+  	return errors.NewRetriableError("database query failed", err)
+  }
+
+	if existingNotification == nil {
+		if err := handler.repo.SaveNotification(notification); err != nil {
+				return errors.NewRetriableError("database operation failed", err)
+		}
+	} else {
+			notification = existingNotification
 	}
 
-	switch notification.Type {
-	case models.EmailNotification:
-		if err := handler.emailHandler.Deliver(notification); err != nil {
-			return err
-		}
-	case models.InAppNotification:
-		if err := handler.websocketHandler.Deliver(notification); err != nil {
-			return err
-		}
-	default:
-		return errors.NewValidationError(
-			fmt.Sprintf("unknown notification type: %s", notification.Type),
-			nil,
-		)
-	}
+	var deliveryErr error
+    switch notification.Type {
+    case models.EmailNotification:
+        deliveryErr = handler.emailHandler.Deliver(notification)
+    case models.InAppNotification:
+        deliveryErr = handler.websocketHandler.Deliver(notification)
+    default:
+        return errors.NewValidationError(
+            fmt.Sprintf("unknown notification type: %s", notification.Type),
+            nil,
+        )
+    }
 
-	log.Printf("Notification processed and saved: ID=%v, Type=%s, User=%s",
-		notification.ID, notification.Type, notification.UserID)
-	return nil
+		if deliveryErr == nil {
+				notification.DeliveryStatus = models.DeliveryStatus{
+						NotificationStatus:    models.Sent,
+				}
+
+				if err := handler.repo.UpdateNotificationStatus(notification.ID, notification.DeliveryStatus); err != 	nil {
+						return errors.NewRetriableError("failed to update notification status", err)
+				}
+		} else if errors.IsRetriableError(deliveryErr) {
+				notification.DeliveryStatus = models.DeliveryStatus{
+						NotificationStatus:    models.Pending,
+						Error:     deliveryErr.Error(),
+				}
+
+				if err := handler.repo.UpdateNotificationStatus(notification.ID, notification.DeliveryStatus); err != 	nil {
+						log.Printf("Failed to update retry status: %v", err)
+				}
+				return deliveryErr
+		} else {
+				notification.DeliveryStatus = models.DeliveryStatus{
+						NotificationStatus:    models.Failed,
+						Error:     deliveryErr.Error(),
+				}
+
+				if err := handler.repo.UpdateNotificationStatus(notification.ID, notification.DeliveryStatus); err != 	nil {
+						log.Printf("Failed to update failed status: %v", err)
+				}
+				return deliveryErr
+		}
+
+		log.Printf("Notification processed and delivered: ID=%v, Type=%s, User=%s",
+				notification.ID, notification.Type, notification.UserID)
+		return nil
 }
 
 func (handler *Handler) validateMessage(data []byte) (*models.Notification, error) {

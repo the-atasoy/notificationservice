@@ -10,7 +10,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 type MongoRepository struct {
@@ -35,16 +34,16 @@ func NewMongoRepository(uri, database string) (*MongoRepository, error) {
     }, nil
 }
 
-func (r *MongoRepository) SaveNotification(notification *models.Notification) error {
+func (repository *MongoRepository) SaveNotification(notification *models.Notification) error {
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
     defer cancel()
 
-    collection := r.client.Database(r.database).Collection(r.collection)
+    collection := repository.client.Database(repository.database).Collection(repository.collection)
 
     notification.ID = primitive.NewObjectID()
     notification.CreatedAt = time.Now()
-    notification.Status = models.DeliveryStatus{
-        Status:    models.Pending,
+    notification.DeliveryStatus = models.DeliveryStatus{
+        NotificationStatus:    models.Pending,
         UpdatedAt: time.Now(),
     }
 
@@ -52,15 +51,15 @@ func (r *MongoRepository) SaveNotification(notification *models.Notification) er
     return err
 }
 
-func (r *MongoRepository) GetUnreadNotifications(userId string) ([]models.Notification, error) {
+func (repository *MongoRepository) GetUnreadNotifications(userId string) ([]models.Notification, error) {
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
     defer cancel()
 
-    collection := r.client.Database(r.database).Collection(r.collection)
+    collection := repository.client.Database(repository.database).Collection(repository.collection)
     
     filter := bson.M{
         "userId": userId,
-        "isReceived": false,
+        "receivedAt": bson.M{"$exists": false},
     }
 
     cursor, err := collection.Find(ctx, filter)
@@ -76,10 +75,38 @@ func (r *MongoRepository) GetUnreadNotifications(userId string) ([]models.Notifi
     return notifications, nil
 }
 
-func (r *MongoRepository) Ping(ctx context.Context) error {
-    return r.client.Ping(ctx, readpref.Primary())
+func (repository *MongoRepository) GetNotificationByMessageID(messageID string) (*models.Notification, error) {
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    collection := repository.client.Database(repository.database).Collection(repository.collection)
+
+    filter := bson.M{"messageId": messageID}
+    var notification models.Notification
+    err := collection.FindOne(ctx, filter).Decode(&notification)
+    if err != nil {
+        if err == mongo.ErrNoDocuments {
+            return nil, nil
+        }
+        return nil, err
+    }
+
+    return &notification, nil
 }
 
-func (r *MongoRepository) Disconnect(ctx context.Context) error {
-    return r.client.Disconnect(ctx)
+func (repository *MongoRepository) UpdateNotificationStatus(notificationID primitive.ObjectID, status models.DeliveryStatus) error {
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    collection := repository.client.Database(repository.database).Collection(repository.collection)
+
+    filter := bson.M{"_id": notificationID}
+    update := bson.M{
+        "$set": bson.M{
+            "status": status,
+        },
+    }
+
+    _, err := collection.UpdateOne(ctx, filter, update)
+    return err
 }
