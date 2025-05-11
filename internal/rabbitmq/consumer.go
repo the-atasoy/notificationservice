@@ -11,7 +11,7 @@ import (
 )
 
 type MessageHandler interface {
-    ProcessMessage([]byte, string) error
+    ProcessMessage([]byte) error
 }
 
 type Consumer struct {
@@ -170,8 +170,7 @@ func (c *Consumer) Start(handler MessageHandler) error {
     for msg := range msgs {
         go func (msg amqp.Delivery) {
             log.Printf("Received message: %s", string(msg.Body))
-
-            err := handler.ProcessMessage(msg.Body, msg.MessageId)
+            err := handler.ProcessMessage(msg.Body)
             if err != nil {
                 log.Printf("Error processing message: %v", err)
                 

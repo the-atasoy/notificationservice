@@ -37,7 +37,7 @@ type MailDetails struct {
 type Notification struct {
 	ID             primitive.ObjectID  `bson:"_id,omitempty" json:"id"`
 	UserID         uuid.UUID           `bson:"userId" json:"userId"`
-	MessageID      string              `bson:"messageId" json:"messageId"`
+	ExternalID     uuid.UUID           `bson:"externalId" json:"externalId"`
 	Subject        string              `bson:"subject" json:"subject"`
 	Body           string              `bson:"body" json:"body"`
 	Type           NotificationType    `bson:"type" json:"type"`

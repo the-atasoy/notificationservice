@@ -8,6 +8,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -75,13 +76,13 @@ func (repository *MongoRepository) GetUnreadNotifications(userId string) ([]mode
     return notifications, nil
 }
 
-func (repository *MongoRepository) GetNotificationByMessageID(messageID string) (*models.Notification, error) {
+func (repository *MongoRepository) GetNotificationByExternalID(externalId uuid.UUID) (*models.Notification, error) {
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
     defer cancel()
 
     collection := repository.client.Database(repository.database).Collection(repository.collection)
 
-    filter := bson.M{"messageId": messageID}
+    filter := bson.M{"externalId": externalId}
     var notification models.Notification
     err := collection.FindOne(ctx, filter).Decode(&notification)
     if err != nil {
