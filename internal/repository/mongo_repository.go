@@ -101,6 +101,8 @@ func (repository *MongoRepository) GetUnsentNotifications(externalId uuid.UUID) 
 }
 
 func (repository *MongoRepository) UpdateNotificationStatus(notificationID primitive.ObjectID, status models.DeliveryStatus) error {
+    status.UpdatedAt = time.Now()
+
     ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
     defer cancel()
 

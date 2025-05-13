@@ -125,7 +125,6 @@ func (handler *Handler) unmarshalMessage(data []byte) (*models.Notification, err
 		return nil, errors.NewValidationError("body is required", nil)
 	}
 	
-	// Convert the message to a full notification
 	notification := message.ToNotification()
 	return notification, nil
 }

@@ -168,7 +168,7 @@ func (c *Consumer) Start(handler MessageHandler) error {
     }
 
     for msg := range msgs {
-        go func (msg amqp.Delivery) {
+        go func(msg amqp.Delivery) {
             log.Printf("Received message: %s", string(msg.Body))
             err := handler.ProcessMessage(msg.Body)
             if err != nil {
