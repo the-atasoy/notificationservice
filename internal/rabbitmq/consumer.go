@@ -167,10 +167,9 @@ func (c *Consumer) Start(handler MessageHandler) error {
         return fmt.Errorf("failed to register consumer: %w", err)
     }
 
-    go func() {
-        for msg := range msgs {
+    for msg := range msgs {
+        go func(msg amqp.Delivery) {
             log.Printf("Received message: %s", string(msg.Body))
-
             err := handler.ProcessMessage(msg.Body)
             if err != nil {
                 log.Printf("Error processing message: %v", err)
@@ -197,8 +196,8 @@ func (c *Consumer) Start(handler MessageHandler) error {
                 log.Printf("Message processed successfully")
                 msg.Ack(false)
             }
-        }
-    }()
+        }(msg)
+    }
 
     log.Println("RabbitMQ consumer started successfully")
     return nil
