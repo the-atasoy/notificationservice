@@ -46,7 +46,7 @@ func (handler *Handler) getNotification(data []byte) (*models.Notification, erro
 		return nil, err
 	}
 
-	existingNotification, err := handler.repo.GetNotificationByExternalID(notification.ExternalID)
+	existingNotification, err := handler.repo.GetUnsentNotifications(notification.ExternalID)
 	if err != nil {
 		return nil, errors.NewRetriableError("database query failed", err)
 	}
@@ -111,20 +111,23 @@ func (handler *Handler) handleDeliveryStatus(notification *models.Notification, 
 }
 
 func (handler *Handler) unmarshalMessage(data []byte) (*models.Notification, error) {
-	var notification models.Notification
-	if err := json.Unmarshal(data, &notification); err != nil {
+	var message models.NotificationMessage
+	if err := json.Unmarshal(data, &message); err != nil {
 		return nil, errors.NewValidationError("invalid JSON format", err)
 	}
-	if notification.UserID.String() == "00000000-0000-0000-0000-000000000000" {
+	if message.UserID.String() == "00000000-0000-0000-0000-000000000000" {
 		return nil, errors.NewValidationError("userID is required", nil)
 	}
-	if notification.Subject == "" {
+	if message.Subject == "" {
 		return nil, errors.NewValidationError("subject is required", nil)
 	}
-	if notification.Body == "" {
+	if message.Body == "" {
 		return nil, errors.NewValidationError("body is required", nil)
 	}
-	return &notification, nil
+	
+	// Convert the message to a full notification
+	notification := message.ToNotification()
+	return notification, nil
 }
 
 func (handler *Handler) GetUnreadNotifications(userId string) ([]models.Notification, error) {
